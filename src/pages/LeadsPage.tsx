@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-	Database, ArrowLeft, Crown, LogOut, Menu, X, Search, Sparkles
+	Database, ArrowLeft, Crown, LogOut, Menu, X, Search, Sparkles, Rocket
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUrlTab } from '@/hooks/useUrlTab';
 import { LeadsExtractorTab } from './leads/LeadsExtractorTab';
 import { LeadsDatabaseTab } from './leads/LeadsDatabaseTab';
 import { LeadsAutopilotTab } from './leads/LeadsAutopilotTab';
+import { LeadsPlannerTab } from './leads/LeadsPlannerTab';
 
-type Tab = 'extractor' | 'database' | 'autopilot';
+type Tab = 'extractor' | 'planner' | 'database' | 'autopilot';
 
 const NAV_ITEMS: { id: Tab; label: string; icon: React.ReactNode; desc: string }[] = [
 	{ id: 'extractor', label: 'Lead Extractor',  icon: <Sparkles size={20} />,   desc: 'Automated scraping' },
+	{ id: 'planner',   label: 'Campaign Planner', icon: <Rocket size={20} />,     desc: 'Multi-day auto campaigns' },
 	{ id: 'database',  label: 'Leads Database',  icon: <Database size={20} />,   desc: 'Browse & contact leads' },
 	{ id: 'autopilot', label: 'AI Auto Pilot',   icon: <Search size={20} />,     desc: 'Automate outreach & follow-up' },
 ];
@@ -21,6 +23,7 @@ const TAB_IDS = NAV_ITEMS.map(n => n.id);
 
 const TAB_LABELS: Record<Tab, string> = {
 	extractor: 'Lead Extractor',
+	planner: 'Campaign Planner',
 	database: 'Leads Database',
 	autopilot: 'AI Auto Pilot',
 };
@@ -150,6 +153,7 @@ export function LeadsPage() {
 				<main className="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-950">
 					<div className="max-w-6xl mx-auto space-y-6">
 						{tab === 'extractor' && <LeadsExtractorTab />}
+						{tab === 'planner' && <LeadsPlannerTab />}
 						{tab === 'database' && <LeadsDatabaseTab />}
 						{tab === 'autopilot' && <LeadsAutopilotTab />}
 					</div>
