@@ -35,7 +35,7 @@ interface InhouseMailbox {
 }
 
 const PRESETS: Record<string, { host: string; port: number; useTLS: boolean; label: string }> = {
-  nexbotix: { host: 'mail.gurumentra.com', port: 465, useTLS: true,  label: '⚡ Nexbotix In-House Email' },
+  nexbotix: { host: 'mail.nexbotix.online', port: 465, useTLS: true,  label: '⚡ Nexbotix In-House Email' },
   gmail:    { host: 'smtp.gmail.com',       port: 587, useTLS: false, label: 'Gmail (App Password)' },
   outlook:  { host: 'smtp.office365.com',   port: 587, useTLS: false, label: 'Outlook / Office 365' },
   yahoo:    { host: 'smtp.mail.yahoo.com',  port: 587, useTLS: false, label: 'Yahoo Mail' },
@@ -127,7 +127,7 @@ export function EmailSMTPPage({ isPaid }: { isPaid: boolean }) {
       const mb = inhouseMailboxes.find(m => m.email === selectedInhouseMailbox) || inhouseMailboxes[0];
       setForm(f => ({
         ...f,
-        host: 'mail.gurumentra.com',
+        host: 'mail.nexbotix.online',
         port: 465,
         useTLS: true,
         username: mb ? mb.email : f.username,
@@ -187,7 +187,7 @@ export function EmailSMTPPage({ isPaid }: { isPaid: boolean }) {
   const save = async () => {
     let checkForm = { ...form };
     if (preset === 'nexbotix') {
-      checkForm.host = checkForm.host || 'mail.gurumentra.com';
+      checkForm.host = checkForm.host || 'mail.nexbotix.online';
       checkForm.port = 465;
       checkForm.useTLS = true;
       if (!checkForm.username) {
@@ -228,7 +228,7 @@ export function EmailSMTPPage({ isPaid }: { isPaid: boolean }) {
   const test = async () => {
     let checkForm = { ...form };
     if (preset === 'nexbotix') {
-      checkForm.host = checkForm.host || 'mail.gurumentra.com';
+      checkForm.host = checkForm.host || 'mail.nexbotix.online';
       checkForm.port = 465;
       checkForm.useTLS = true;
       if (!checkForm.username) {
@@ -444,7 +444,7 @@ export function EmailSMTPPage({ isPaid }: { isPaid: boolean }) {
                       if (found) {
                         setForm(f => ({
                           ...f,
-                          host: 'mail.gurumentra.com',
+                          host: 'mail.nexbotix.online',
                           port: 465,
                           useTLS: true,
                           username: found.email,
