@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Globe, Mail, CheckCircle2, AlertCircle, RefreshCw, Copy, Check,
   Plus, Trash2, KeyRound, ChevronDown, ChevronUp,
-  Loader2, Zap, HelpCircle, X, ArrowRight
+  Loader2, Zap, HelpCircle, X, ArrowRight, Inbox
 } from 'lucide-react';
 import { apiFetch, API_ENDPOINTS } from '@/config/api';
 import { useNavigate } from 'react-router-dom';
@@ -33,6 +33,7 @@ interface MailboxRecord {
   username: string;
   email: string;
   status: string;
+  isSendOnly?: boolean;
   createdAt: string;
 }
 
@@ -63,7 +64,9 @@ export function DomainEmailPage({ isPaid }: { isPaid?: boolean }) {
   const [mailboxDomainId, setMailboxDomainId] = useState('');
   const [mailboxUser, setMailboxUser] = useState('');
   const [mailboxPwd, setMailboxPwd] = useState('');
+  const [mailboxIsSendOnly, setMailboxIsSendOnly] = useState(false);
   const [mailboxSubmitting, setMailboxSubmitting] = useState(false);
+  const [togglingSendOnlyId, setTogglingSendOnlyId] = useState<string | null>(null);
 
   const [resetPwdOpen, setResetPwdOpen] = useState(false);
   const [activeMailbox, setActiveMailbox] = useState<MailboxRecord | null>(null);
@@ -224,6 +227,7 @@ export function DomainEmailPage({ isPaid }: { isPaid?: boolean }) {
           domainId: mailboxDomainId,
           username: mailboxUser.trim(),
           password: mailboxPwd.trim(),
+          isSendOnly: mailboxIsSendOnly,
         }),
       });
       const data = await res.json();
@@ -231,8 +235,12 @@ export function DomainEmailPage({ isPaid }: { isPaid?: boolean }) {
         setMailboxes(prev => [data.data, ...prev]);
         setMailboxUser('');
         setMailboxPwd('');
+        setMailboxIsSendOnly(false);
         setAddMailboxOpen(false);
-        setBannerMsg({ text: `Mailbox ${data.data.email} created successfully!`, type: 'success' });
+        setBannerMsg({
+          text: `Mailbox ${data.data.email} created successfully${data.data.isSendOnly ? ' (Send-Only)' : ' (Send & Receive)'}!`,
+          type: 'success'
+        });
         loadData();
       } else {
         setBannerMsg({ text: data.error || 'Failed to create mailbox.', type: 'error' });
@@ -241,6 +249,33 @@ export function DomainEmailPage({ isPaid }: { isPaid?: boolean }) {
       setBannerMsg({ text: 'Error creating mailbox.', type: 'error' });
     } finally {
       setMailboxSubmitting(false);
+    }
+  };
+
+  const handleToggleSendOnly = async (mailbox: MailboxRecord) => {
+    setTogglingSendOnlyId(mailbox.id);
+    setBannerMsg(null);
+    const targetState = !mailbox.isSendOnly;
+    try {
+      const res = await apiFetch(API_ENDPOINTS.email.mailboxSendOnly(mailbox.id), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isSendOnly: targetState }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMailboxes(prev => prev.map(m => m.id === mailbox.id ? { ...m, isSendOnly: targetState } : m));
+        setBannerMsg({
+          text: `${mailbox.email} is now ${targetState ? 'Send-Only (inbox receiving disabled)' : 'Send & Receive (inbox receiving enabled)'}.`,
+          type: 'success',
+        });
+      } else {
+        setBannerMsg({ text: data.error || 'Failed to update send-only setting.', type: 'error' });
+      }
+    } catch {
+      setBannerMsg({ text: 'Error connecting to server.', type: 'error' });
+    } finally {
+      setTogglingSendOnlyId(null);
     }
   };
 
@@ -784,10 +819,19 @@ export function DomainEmailPage({ isPaid }: { isPaid?: boolean }) {
                       </div>
                       <div>
                         <p className="text-sm font-bold text-gray-900 font-mono break-all">{m.email}</p>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                             Active
                           </span>
+                          {m.isSendOnly ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200" title="This mailbox only sends emails; incoming mail is not received in the inbox">
+                              Send Only
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200" title="Can send emails and receive incoming emails in your inbox">
+                              Send & Receive
+                            </span>
+                          )}
                           {isCurrentSender && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
                               <CheckCircle2 size={10} className="text-indigo-600" /> Active Sender
@@ -821,33 +865,60 @@ export function DomainEmailPage({ isPaid }: { isPaid?: boolean }) {
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-gray-100 flex items-center justify-between gap-2.5">
-                    {isCurrentSender ? (
-                      <div className="flex-1 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-sm">
-                        <CheckCircle2 size={13} className="text-emerald-600" />
-                        <span>Connected to Nexbotix Sender</span>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => handleConnectSMTP(m)}
-                        disabled={isConnecting}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm transition-all disabled:opacity-50"
-                      >
-                        <Zap size={13} className={isConnecting ? 'animate-bounce text-amber-300' : 'text-amber-300 fill-amber-300'} />
-                        <span>{isConnecting ? 'Connecting Sender...' : 'Connect to Nexbotix Sender'}</span>
-                      </button>
-                    )}
+                  <div className="pt-3 border-t border-gray-100 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2.5">
+                      {isCurrentSender ? (
+                        <div className="flex-1 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-sm">
+                          <CheckCircle2 size={13} className="text-emerald-600" />
+                          <span>Connected to Nexbotix Sender</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleConnectSMTP(m)}
+                          disabled={isConnecting}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-sm transition-all disabled:opacity-50"
+                        >
+                          <Zap size={13} className={isConnecting ? 'animate-bounce text-amber-300' : 'text-amber-300 fill-amber-300'} />
+                          <span>{isConnecting ? 'Connecting Sender...' : 'Connect to Nexbotix Sender'}</span>
+                        </button>
+                      )}
 
-                    <button
-                      onClick={() => {
-                        setConfigMailbox(m);
-                        setClientConfigOpen(true);
-                      }}
-                      className="p-2 rounded-xl text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 border border-gray-200 transition-colors"
-                      title="View IMAP / SMTP client setup instructions"
-                    >
-                      <HelpCircle size={15} />
-                    </button>
+                      <button
+                        onClick={() => {
+                          setConfigMailbox(m);
+                          setClientConfigOpen(true);
+                        }}
+                        className="p-2 rounded-xl text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 border border-gray-200 transition-colors"
+                        title="View IMAP / SMTP client setup instructions"
+                      >
+                        <HelpCircle size={15} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-dashed border-gray-100 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSendOnly(m)}
+                        disabled={togglingSendOnlyId === m.id}
+                        className="text-[11px] font-medium text-gray-500 hover:text-gray-800 flex items-center gap-1 disabled:opacity-50 transition-colors"
+                        title={m.isSendOnly ? 'Allow incoming email reception into Nexbotix Inbox' : 'Disable incoming email reception (outgoing only)'}
+                      >
+                        {togglingSendOnlyId === m.id && <Loader2 size={11} className="animate-spin" />}
+                        <span>{m.isSendOnly ? 'Switch to Send & Receive' : 'Switch to Send-Only'}</span>
+                      </button>
+
+                      {!m.isSendOnly && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/email?tab=inbox&mailbox=${encodeURIComponent(m.email)}`)}
+                          className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
+                        >
+                          <Inbox size={12} />
+                          <span>View Inbox</span>
+                          <ArrowRight size={11} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -968,6 +1039,28 @@ export function DomainEmailPage({ isPaid }: { isPaid?: boolean }) {
                   onChange={e => setMailboxPwd(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-gray-300 text-gray-900 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </div>
+
+              {/* Send-only checkbox */}
+              <div className="rounded-xl border border-gray-200 bg-gray-50/80 p-3.5 transition-colors">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={mailboxIsSendOnly}
+                    onChange={e => setMailboxIsSendOnly(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <div>
+                    <span className="block text-xs font-semibold text-gray-900">
+                      This mail is only for sending
+                    </span>
+                    <span className="block text-[11px] text-gray-500 leading-normal mt-0.5">
+                      {mailboxIsSendOnly
+                        ? 'Outgoing only. Incoming emails will not be routed to your inbox.'
+                        : 'Unchecked: incoming emails sent to this address will be received in your Nexbotix Inbox.'}
+                    </span>
+                  </div>
+                </label>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-2">

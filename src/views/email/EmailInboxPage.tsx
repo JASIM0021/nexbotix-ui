@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Mail, Search, RefreshCw, ChevronLeft, ChevronRight, Inbox, Calendar, User, ArrowLeft, Loader2, Info, Bell, Plus, Trash2, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Mail, Search, RefreshCw, ChevronLeft, ChevronRight, Inbox, Calendar, User, ArrowLeft, Loader2, Info, Bell, Plus, Trash2, X, AlertCircle } from 'lucide-react';
 import { apiFetch, API_ENDPOINTS } from '@/config/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/ui/Toast';
 
 interface EmailMessage {
-  uid: number;
+  uid: string | number;
   subject: string;
   from: string;
   date: string;
@@ -30,26 +31,42 @@ interface EmailReminder {
 interface EmailMetadata {
   id: string;
   userId: string;
-  messageUid: number;
+  messageUid: string | number;
   priority: string;
   reminders: EmailReminder[];
   messageSubject: string;
   messageSender: string;
 }
 
+interface InboxAccount {
+  id: string;
+  email: string;
+  domain: string;
+  isSendOnly: boolean;
+  isDefault: boolean;
+  provider: string;
+}
+
 export function EmailInboxPage({ isPaid }: { isPaid: boolean }) {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlMailbox = searchParams.get('mailbox') || '';
+
   const { user } = useAuth();
   const { showToast, ToastComponent } = useToast();
   const [messages, setMessages] = useState<EmailMessage[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedUid, setSelectedUid] = useState<number | null>(null);
+  const [selectedUid, setSelectedUid] = useState<string | number | null>(null);
   const [messageText, setMessageText] = useState<MessageText | null>(null);
   const [loadingText, setLoadingText] = useState(false);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const perPage = 15;
+
+  const [inboxAccounts, setInboxAccounts] = useState<InboxAccount[]>([]);
+  const [selectedMailbox, setSelectedMailbox] = useState<string>(urlMailbox);
 
   const [metadataList, setMetadataList] = useState<EmailMetadata[]>([]);
   const [showReminderModal, setShowReminderModal] = useState(false);
@@ -61,16 +78,46 @@ export function EmailInboxPage({ isPaid }: { isPaid: boolean }) {
 
   useEffect(() => {
     if (isPaid) {
-      fetchMessages();
+      fetchInboxAccounts();
+    }
+  }, [isPaid]);
+
+  useEffect(() => {
+    if (isPaid) {
+      fetchMessages(selectedMailbox, page);
       fetchMetadata();
     }
-  }, [isPaid, page]);
+  }, [isPaid, page, selectedMailbox]);
 
-  const fetchMessages = async () => {
+  const fetchInboxAccounts = async () => {
+    try {
+      const r = await apiFetch(API_ENDPOINTS.email.inboxMailboxes);
+      const d = await r.json();
+      if (d.success && Array.isArray(d.data)) {
+        setInboxAccounts(d.data);
+        if (!urlMailbox && d.data.length > 0) {
+          const defaultAcc = d.data.find((a: InboxAccount) => a.isDefault && !a.isSendOnly)
+            || d.data.find((a: InboxAccount) => !a.isSendOnly)
+            || d.data[0];
+          if (defaultAcc) {
+            setSelectedMailbox(defaultAcc.email || defaultAcc.id);
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch inbox accounts', e);
+    }
+  };
+
+  const fetchMessages = async (mb = selectedMailbox, pageNum = page) => {
     setLoading(true);
     setError(null);
     try {
-      const r = await apiFetch(`${API_ENDPOINTS.email.inbox}?page=${page}&perPage=${perPage}`);
+      let url = `${API_ENDPOINTS.email.inbox}?page=${pageNum}&perPage=${perPage}`;
+      if (mb) {
+        url += `&mailbox=${encodeURIComponent(mb)}`;
+      }
+      const r = await apiFetch(url);
       const d = await r.json();
       if (d.success) {
         setMessages(d.data || []);
@@ -84,12 +131,16 @@ export function EmailInboxPage({ isPaid }: { isPaid: boolean }) {
     setLoading(false);
   };
 
-  const fetchMessageBody = async (uid: number) => {
+  const fetchMessageBody = async (uid: string | number) => {
     setSelectedUid(uid);
     setLoadingText(true);
     setMessageText(null);
     try {
-      const r = await apiFetch(`${API_ENDPOINTS.email.inbox}/message/${uid}`);
+      let url = `${API_ENDPOINTS.email.inbox}/message/${uid}`;
+      if (selectedMailbox) {
+        url += `?mailbox=${encodeURIComponent(selectedMailbox)}`;
+      }
+      const r = await apiFetch(url);
       const d = await r.json();
       if (d.success && d.data) {
         setMessageText(d.data);
@@ -115,7 +166,7 @@ export function EmailInboxPage({ isPaid }: { isPaid: boolean }) {
     }
   };
 
-  const handleUpdateMetadata = async (uid: number, priority: string, reminders: EmailReminder[]) => {
+  const handleUpdateMetadata = async (uid: string | number, priority: string, reminders: EmailReminder[]) => {
     try {
       const msg = messages.find(m => m.uid === uid);
       const payload = {
@@ -188,11 +239,13 @@ export function EmailInboxPage({ isPaid }: { isPaid: boolean }) {
     );
   }
 
+  const currentAccount = inboxAccounts.find(a => (a.email.toLowerCase() === selectedMailbox.toLowerCase() || a.id === selectedMailbox));
+
   return (
     <div className="h-[calc(100vh-140px)] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
       {/* Top action bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between border-b border-gray-150 p-4 gap-3 bg-slate-50/50">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap">
           <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
             <Inbox size={16} className="text-blue-500" />
             Inbox ({total})
@@ -205,6 +258,34 @@ export function EmailInboxPage({ isPaid }: { isPaid: boolean }) {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
+
+          {/* Mailbox Selector */}
+          {inboxAccounts.length > 0 && (
+            <div className="flex items-center gap-1.5 pl-2 sm:border-l sm:border-gray-200">
+              <span className="text-[11px] font-semibold text-gray-500 hidden md:inline">Account:</span>
+              <select
+                value={selectedMailbox}
+                onChange={e => {
+                  const val = e.target.value;
+                  setSelectedMailbox(val);
+                  setPage(1);
+                  setSelectedUid(null);
+                  setSearchParams(prev => {
+                    const p = new URLSearchParams(prev);
+                    if (val) p.set('mailbox', val); else p.delete('mailbox');
+                    return p;
+                  }, { replace: true });
+                }}
+                className="text-xs font-semibold py-1 px-2.5 rounded-lg border border-gray-200 bg-white text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
+              >
+                {inboxAccounts.map(acc => (
+                  <option key={acc.id} value={acc.email || acc.id}>
+                    {acc.email} {acc.isSendOnly ? '(Send Only)' : ''} {acc.isDefault ? '★' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
@@ -242,6 +323,24 @@ export function EmailInboxPage({ isPaid }: { isPaid: boolean }) {
           </div>
         </div>
       </div>
+
+      {/* Warning if current account is send-only */}
+      {currentAccount?.isSendOnly && (
+        <div className="bg-amber-50 border-b border-amber-200 px-4 py-2.5 flex items-center justify-between text-xs text-amber-900">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={15} className="text-amber-600 shrink-0" />
+            <span>
+              <strong>{currentAccount.email}</strong> is configured as <strong>Send Only</strong>. Incoming emails sent to this address will not be received.
+            </span>
+          </div>
+          <button
+            onClick={() => navigate('/email?tab=domains')}
+            className="text-xs font-semibold text-blue-700 hover:text-blue-900 underline shrink-0 ml-3"
+          >
+            Manage in Custom Domain Email
+          </button>
+        </div>
+      )}
 
       {/* Main split-pane content */}
       <div className="flex-1 flex overflow-hidden min-h-0">

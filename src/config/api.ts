@@ -189,7 +189,9 @@ export const API_ENDPOINTS = {
     mailbox: (id: string) => `${API_BASE_URL}/api/email/mailboxes/${id}`,
     mailboxPassword: (id: string) => `${API_BASE_URL}/api/email/mailboxes/${id}/password`,
     mailboxConnectSMTP: (id: string) => `${API_BASE_URL}/api/email/mailboxes/${id}/connect-smtp`,
+    mailboxSendOnly: (id: string) => `${API_BASE_URL}/api/email/mailboxes/${id}/send-only`,
     mailboxQuota: `${API_BASE_URL}/api/email/mailboxes/quota`,
+    inboxMailboxes: `${API_BASE_URL}/api/email/inbox/mailboxes`,
   },
   // ── Facebook (Omnichannel) ────────────────────────────────────────────
   facebook: {
